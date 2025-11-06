@@ -74,13 +74,28 @@ func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Requ
 
 func (s *CollectionService) GetByOrigin(w http.ResponseWriter, r *http.Request) {
 	targetOrigin := r.FormValue("origin")
-
+	var (
+		res interface{}
+		err error
+	)
 	if targetOrigin != "" {
-		
+		res, err = s.uc.GetByOrigin(r.Context(), targetOrigin)
+	} else {
+		res, err = s.uc.GetAllGroupedByOrigin(r.Context())
 	}
+	if err != nil {
+		log.Printf("Internal server error: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *CollectionService) GetAll(w http.ResponseWriter, r *http.Request) {
+
 }
 func (s *CollectionService) GetByTimeRange(w http.ResponseWriter, r *http.Request) {
-
+	
 }
 
 // --- 辅助函数 (可以放在这个文件的末尾，或单独的包里) ---

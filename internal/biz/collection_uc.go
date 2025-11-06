@@ -66,3 +66,11 @@ func (uc *CollectionUsecase) GetByOrigin(ctx context.Context, origin string) ([]
 	}
 	return cols, err
 }
+
+func (uc *CollectionUsecase) GetAllGroupedByOrigin(ctx context.Context) (map[string][]*Collection, error) {
+	maps, err := uc.repo.GetAllGroupedByOrigin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return maps, err
+}

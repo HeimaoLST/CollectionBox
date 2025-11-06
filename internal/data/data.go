@@ -78,3 +78,25 @@ func (repo *sqlRepo) GetByOrigin(ctx context.Context, origin string) ([]*biz.Col
 	}
 	return results, nil
 }
+
+func (repo *sqlRepo) GetAllGroupedByOrigin(ctx context.Context) (map[string][]*biz.Collection, error) {
+	var pos []*CollectionPO
+
+	//TODO: I think it will cause OOM in future
+	err := repo.db.WithContext(ctx).Order("origin").Find(&pos).Error
+	if err != nil {
+		return nil, biz.ErrInternalError.WithMessage(err.Error())
+	}
+	resultMap := make(map[string][]*biz.Collection)
+
+	for _, po := range pos {
+		// 4. 将 PO 转换为 DO
+		do := po.toBiz() // (假设您有这个转换函数)
+
+		// 5. 按 Origin 存入 map
+		resultMap[do.Origin] = append(resultMap[do.Origin], do)
+	}
+
+	return resultMap, nil
+
+}
