@@ -37,6 +37,7 @@ func (po *CollectionPO) toBiz() *biz.Collection {
 	}
 }
 func NewSQLRepo(db *gorm.DB) biz.CollectionRepo {
+	db.AutoMigrate(&CollectionPO{})
 	return &sqlRepo{db: db}
 }
 

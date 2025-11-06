@@ -38,7 +38,7 @@ var (
 	// Note: we intentionally use the concrete myerror type for these
 	// variables so callers can call WithMessage directly, e.g.
 	// ErrInvaildArgument.WithMessage("origin cannot be empty").
-	ErrInvaildArgument myerror = NewMyError("invaild argument")
+	ErrInvalidArgument myerror = NewMyError("invaild argument")
 	ErrNotFound        myerror = NewMyError("not found")
 	ErrInternalError   myerror = NewMyError("internal error")
 )

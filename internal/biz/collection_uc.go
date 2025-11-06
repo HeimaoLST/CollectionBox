@@ -8,20 +8,22 @@ import (
 )
 
 type CollectionUsecase struct {
-	repo CollectionRepo
+	repo     CollectionRepo
+	originex OriginExtractor
 }
 
-func NewCollectionUsecase(repo CollectionRepo) *CollectionUsecase {
-	return &CollectionUsecase{repo: repo}
+func NewCollectionUsecase(repo CollectionRepo, ex OriginExtractor) *CollectionUsecase {
+	return &CollectionUsecase{repo: repo, originex: ex}
 }
 
-func (uc *CollectionUsecase) CreateCollection(ctx context.Context, url string, origin string) (*Collection, error) {
+func (uc *CollectionUsecase) CreateCollection(ctx context.Context, url string) (*Collection, error) {
 	if url == "" {
-		return nil, ErrInvaildArgument.WithMessage("url cannot be empty")
+		return nil, ErrInvalidArgument.WithMessage("url cannot be empty")
 	}
-	if origin == "" {
-		return nil, ErrInvaildArgument.WithMessage("origin cannot be empty")
-
+	origin, err := uc.originex.Extract(ctx, url)
+	if err != nil {
+		// 如果 Extract 返回了 biz.ErrInvalidArgument，就直接透传
+		return nil, err
 	}
 	col := &Collection{
 		ID:        uuid.NewString(),
@@ -31,7 +33,7 @@ func (uc *CollectionUsecase) CreateCollection(ctx context.Context, url string, o
 	}
 
 	if uc == nil || uc.repo == nil {
-		return nil, ErrInvaildArgument.WithMessage("repository not configured")
+		return nil, ErrInvalidArgument.WithMessage("repository not configured")
 	}
 
 	if err := uc.repo.CreateCollection(ctx, col); err != nil {
@@ -42,7 +44,7 @@ func (uc *CollectionUsecase) CreateCollection(ctx context.Context, url string, o
 }
 func (uc *CollectionUsecase) GetByTimeRange(ctx context.Context, days int) ([]*Collection, error) {
 	if days <= 0 || days >= 15 {
-		return nil, ErrInvaildArgument.WithMessage("too long ago")
+		return nil, ErrInvalidArgument.WithMessage("too long ago")
 	}
 	end := time.Now()
 	start := end.AddDate(0, 0, -days)
@@ -56,7 +58,7 @@ func (uc *CollectionUsecase) GetByTimeRange(ctx context.Context, days int) ([]*C
 }
 func (uc *CollectionUsecase) GetByOrigin(ctx context.Context, origin string) ([]*Collection, error) {
 	if origin == "" {
-		return nil, ErrInvaildArgument.WithMessage("the origin you want to search can't be empty")
+		return nil, ErrInvalidArgument.WithMessage("the origin you want to search can't be empty")
 	}
 	cols, err := uc.repo.GetByOrigin(ctx, origin)
 	if err != nil {
