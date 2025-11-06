@@ -1,0 +1,6 @@
+{
+    "support":["Bilibili"],
+    "items":[
+        {"host":"bilibili.com","origin":"Bilibili"}
+    ]
+}
