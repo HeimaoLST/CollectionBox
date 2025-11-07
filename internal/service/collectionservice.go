@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github/heimaolst/collectionbox/internal/biz"
-	"log"
+	"github/heimaolst/collectionbox/internal/logx"
 	"net/http"
+	"time"
 )
 
 type CollectionService struct {
@@ -15,7 +17,10 @@ type CollectionService struct {
 type CreateRequest struct {
 	URL string `json:"url"`
 }
-type GetRequest struct {
+type GetByTimeRangeRequest struct {
+	Origin string     `json:"origin"`
+	Start  *time.Time `json:"start,omitempty"`
+	End    *time.Time `json:"end,omitempty"`
 }
 
 func NewService(uc *biz.CollectionUsecase) *CollectionService {
@@ -44,32 +49,24 @@ func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// 3. 调用 biz 层
-	// 【最佳实践】使用 r.Context() 而不是 context.Background()
-	// 这样如果客户端断开连接，biz 层的操作可以被取消
+	// 3. 调用 biz 层（批量从文本提取 URL:Origin 并创建 Collections）
 	ctx := r.Context()
-	col, err := s.uc.CreateCollection(ctx, req.URL)
+	cols, err := s.uc.CreateCollectionsFromText(ctx, req.URL)
 
 	// 4. 【关键】翻译 biz 层错误
 	if err != nil {
 		// 在这里，我们检查 biz 层返回的是哪种错误
 		if errors.Is(err, biz.ErrInvalidArgument) {
-			// 业务逻辑说：参数无效 (400)
 			writeError(w, http.StatusBadRequest, err.Error())
 		} else {
-			// 未知错误，这是服务器内部错误 (500)
-			// 【重要】不要把 err.Error() 暴露给客户端
-			// 我们应该记录详细日志
-			log.Printf("Internal server error: %v", err)
-			// 只返回一个通用的错误信息
+			logx.FromContext(ctx).Error("internal error creating collections", "err", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 		}
-		return // 不要忘记返回
+		return
 	}
 
-	// 5. 返回成功响应
-	// 业务创建成功，应该返回 201 Created
-	writeJSON(w, http.StatusCreated, col)
+	// 5. 返回成功响应（批量创建）
+	writeJSON(w, http.StatusCreated, cols)
 }
 
 func (s *CollectionService) GetByOrigin(w http.ResponseWriter, r *http.Request) {
@@ -79,12 +76,22 @@ func (s *CollectionService) GetByOrigin(w http.ResponseWriter, r *http.Request) 
 		err error
 	)
 	if targetOrigin != "" {
-		res, err = s.uc.GetByOrigin(r.Context(), targetOrigin)
+		cols, err := s.uc.GetByOrigin(r.Context(), targetOrigin)
+		if err != nil {
+			logx.FromContext(r.Context()).Error("get by origin failed", "err", err)
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		mp := make(map[string][]*biz.Collection)
+		for _, col := range cols {
+			mp[col.Origin] = append(mp[col.Origin], col)
+		}
+		res = mp
 	} else {
 		res, err = s.uc.GetAllGroupedByOrigin(r.Context())
 	}
 	if err != nil {
-		log.Printf("Internal server error: %v", err)
+		logx.FromContext(r.Context()).Error("get by time range failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -95,7 +102,34 @@ func (s *CollectionService) GetAll(w http.ResponseWriter, r *http.Request) {
 
 }
 func (s *CollectionService) GetByTimeRange(w http.ResponseWriter, r *http.Request) {
-	
+	if r.Body != nil {
+		defer r.Body.Close()
+	}
+	var req GetByTimeRangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON format: "+err.Error())
+		return
+	}
+	//clean data
+	// Set default time range to the last 24 hours if not provided
+	// 没有参数视为一天
+	if req.Start == nil {
+		t := time.Now().Add(-24 * time.Hour)
+		req.Start = &t
+	}
+	if req.End == nil {
+		t := time.Now()
+		req.End = &t
+		// if req.Origin == "" it will return all origin (handled by biz layer)
+		cols, err := s.uc.GetByTimeRange(r.Context(), *req.Start, *req.End, req.Origin)
+		if err != nil {
+			logx.FromContext(r.Context()).Error("get by time range failed", "err", err)
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		writeJSON(w, http.StatusOK, cols)
+
+	}
 }
 
 // --- 辅助函数 (可以放在这个文件的末尾，或单独的包里) ---
@@ -113,6 +147,7 @@ func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("Failed to encode response: %v", err)
+		// no request context here; use base logger with TODO context
+		logx.FromContext(context.TODO()).Error("encode response failed", "err", err)
 	}
 }

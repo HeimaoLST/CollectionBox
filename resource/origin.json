@@ -1,6 +1,81 @@
 {
-    "support":["Bilibili"],
-    "items":[
-        {"host":"bilibili.com","origin":"Bilibili"}
-    ]
+  "support": [
+    "Bilibili",
+    "Baidu",
+    "Tencent",
+    "Taobao",
+    "Tmall",
+    "JD",
+    "Weibo",
+    "Douyin",
+    "Zhihu",
+    "Netease",
+    "Sina",
+    "iQiyi",
+    "Youku",
+    "Meituan",
+    "Ctrip"
+  ],
+  "items": [
+    {
+      "host": "bilibili.com",
+      "origin": "Bilibili"
+    },
+    {
+      "host": "baidu.com",
+      "origin": "Baidu"
+    },
+    {
+      "host": "qq.com",
+      "origin": "Tencent"
+    },
+    {
+      "host": "taobao.com",
+      "origin": "Taobao"
+    },
+    {
+      "host": "tmall.com",
+      "origin": "Tmall"
+    },
+    {
+      "host": "jd.com",
+      "origin": "JD"
+    },
+    {
+      "host": "weibo.com",
+      "origin": "Weibo"
+    },
+    {
+      "host": "douyin.com",
+      "origin": "Douyin"
+    },
+    {
+      "host": "zhihu.com",
+      "origin": "Zhihu"
+    },
+    {
+      "host": "163.com",
+      "origin": "Netease"
+    },
+    {
+      "host": "sina.com.cn",
+      "origin": "Sina"
+    },
+    {
+      "host": "iqiyi.com",
+      "origin": "iQiyi"
+    },
+    {
+      "host": "youku.com",
+      "origin": "Youku"
+    },
+    {
+      "host": "meituan.com",
+      "origin": "Meituan"
+    },
+    {
+      "host": "ctrip.com",
+      "origin": "Ctrip"
+    }
+  ]
 }

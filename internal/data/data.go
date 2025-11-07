@@ -47,12 +47,20 @@ func (repo *sqlRepo) CreateCollection(ctx context.Context, c *biz.Collection) er
 	return err
 }
 
-func (repo *sqlRepo) GetByTimeRange(ctx context.Context, start time.Time, end time.Time) ([]*biz.Collection, error) {
+func (repo *sqlRepo) GetByTimeRange(ctx context.Context, start time.Time, end time.Time, origin string) ([]*biz.Collection, error) {
 	var pos []*CollectionPO
+	var err error
+	if origin == "" {
+		err = repo.db.WithContext(ctx).
+			Where("create_at BETWEEN ? AND ?", start, end).
+			Find(&pos).Error
+	} else {
+		err = repo.db.WithContext(ctx).
+			Where("create_at BETWEEN ? AND ?", start, end).
+			Where("origin = ?", origin).
+			Find(&pos).Error
+	}
 
-	err := repo.db.WithContext(ctx).
-		Where("create_at BETWEEN ? AND ?", start, end).
-		Find(&pos).Error
 	if err != nil {
 		return nil, biz.ErrInternalError.WithMessage(err.Error())
 	}
