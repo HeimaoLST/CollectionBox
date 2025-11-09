@@ -49,13 +49,13 @@ func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// 3. 调用 biz 层（批量从文本提取 URL:Origin 并创建 Collections）
+
 	ctx := r.Context()
 	cols, err := s.uc.CreateCollectionsFromText(ctx, req.URL)
 
 	// 4. 【关键】翻译 biz 层错误
 	if err != nil {
-		// 在这里，我们检查 biz 层返回的是哪种错误
+	
 		if errors.Is(err, biz.ErrInvalidArgument) {
 			writeError(w, http.StatusBadRequest, err.Error())
 		} else {

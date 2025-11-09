@@ -58,25 +58,6 @@ func NewJSONOriginExtractor(filePath string) (biz.OriginExtractor, error) {
 	return &jsonOriginExtractor{originMap: originMap}, nil
 }
 
-// 4. 实现接口 (这里是您 GetOrgin 的逻辑)
-// Extract 从文本中提取*第一个*受支持的 Origin
-// func (e *jsonOriginExtractor) Extract(ctx context.Context, rawText string) (string, error) {
-// 	if rawText == "" {
-// 		return "", biz.ErrInvalidArgument.WithMessage("url cannot be empty")
-// 	}
-
-// 	// 1. 使用正则查找第一个匹配的 URL 字符串
-// 	foundURL := urlRegex.FindString(rawText)
-
-// 	if foundURL == "" {
-// 		return "", biz.ErrInvalidArgument.WithMessage("no valid URL found in input text")
-// 	}
-
-// 	// 2. 将找到的 URL (例如 "mail.google.com") 交给辅助函数去解析
-// 	return e.parseAndFindOrigin(foundURL)
-// }
-
-// --- 方案二：ExtractAll (提取所有匹配的) ---
 
 func (e *jsonOriginExtractor) ExtractAll(ctx context.Context, rawText string) ([]biz.URLOriPair, error) {
 	if rawText == "" {
