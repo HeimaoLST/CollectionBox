@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/mattn/go-sqlite3"
 )
 
 type CollectionUsecase struct {
@@ -42,7 +42,7 @@ func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text
 		}
 		if err := uc.repo.CreateCollection(ctx, col); err != nil {
 			// stop on first persist error and return progress + error
-			if errors.Is(err, gorm.ErrDuplicatedKey) {
+			if isSQLiteUniqueConstraintError(err) {
 				duplications = append(duplications, p.URL)
 				continue
 			}
@@ -105,4 +105,14 @@ func (uc *CollectionUsecase) GetAllGroupedByOrigin(ctx context.Context) (map[str
 		return nil, err
 	}
 	return maps, err
+}
+func isSQLiteUniqueConstraintError(err error) bool {
+	var sqliteErr sqlite3.Error
+	// 使用 errors.As 沿着错误链查找底层的 sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		// SQLite 约束错误的代码通常是 SQLITE_CONSTRAINT (Code 19)
+		// ErrConstraint 是更通用的约束错误，但通常包含了唯一键冲突
+		return sqliteErr.Code == sqlite3.ErrConstraint
+	}
+	return false
 }
