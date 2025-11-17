@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github/heimaolst/collectionbox/internal/biz"
-	"github/heimaolst/collectionbox/internal/logx"
 	"net/http"
 	"time"
+
+	"github/heimaolst/collectionbox/internal/biz"
+	"github/heimaolst/collectionbox/internal/logx"
 )
 
 type CollectionService struct {
@@ -42,20 +43,17 @@ func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "Invalid JSON format: "+err.Error())
 		return
 	}
-
 	// (可选的格式校验)
 	if req.URL == "" {
 		writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
 
-
 	ctx := r.Context()
 	cols, err := s.uc.CreateCollectionsFromText(ctx, req.URL)
-
 	// 4. 【关键】翻译 biz 层错误
 	if err != nil {
-	
+
 		if errors.Is(err, biz.ErrInvalidArgument) {
 			writeError(w, http.StatusBadRequest, err.Error())
 		} else {
@@ -67,6 +65,23 @@ func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Requ
 
 	// 5. 返回成功响应（批量创建）
 	writeJSON(w, http.StatusCreated, cols)
+}
+
+type UpdateCollectionTimeRequest struct {
+	dups []string
+}
+
+func (s *CollectionService) UpdateCollectionTime(w http.ResponseWriter, r *http.Request) {
+	var req UpdateCollectionTimeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusInternalServerError, "json decode error")
+	}
+	err := s.uc.UpdateCollectionCreateTime(r.Context(), req.dups)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "UpdateCollectionTime error")
+	}
+
+	writeJSON(w, http.StatusOK, nil)
 }
 
 func (s *CollectionService) GetByOrigin(w http.ResponseWriter, r *http.Request) {
@@ -99,8 +114,8 @@ func (s *CollectionService) GetByOrigin(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *CollectionService) GetAll(w http.ResponseWriter, r *http.Request) {
-
 }
+
 func (s *CollectionService) GetByTimeRange(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		defer r.Body.Close()
@@ -110,7 +125,7 @@ func (s *CollectionService) GetByTimeRange(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "Invalid JSON format: "+err.Error())
 		return
 	}
-	//clean data
+	// clean data
 	// Set default time range to the last 24 hours if not provided
 	// 没有参数视为一天
 	if req.Start == nil {

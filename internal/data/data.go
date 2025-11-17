@@ -2,8 +2,9 @@ package data
 
 import (
 	"context"
-	"github/heimaolst/collectionbox/internal/biz"
 	"time"
+
+	"github/heimaolst/collectionbox/internal/biz"
 
 	_ "github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
@@ -12,7 +13,7 @@ import (
 type CollectionPO struct {
 	ID        string
 	CreatedAt time.Time
-	URL       string
+	URL       string `gorm:"uniqueIndex"`
 	Origin    string
 }
 
@@ -28,6 +29,7 @@ func fromBiz(do *biz.Collection) *CollectionPO {
 		Origin:    do.Origin,
 	}
 }
+
 func (po *CollectionPO) toBiz() *biz.Collection {
 	return &biz.Collection{
 		ID:        po.ID,
@@ -36,6 +38,7 @@ func (po *CollectionPO) toBiz() *biz.Collection {
 		Origin:    po.Origin,
 	}
 }
+
 func NewSQLRepo(db *gorm.DB) biz.CollectionRepo {
 	db.AutoMigrate(&CollectionPO{})
 	return &sqlRepo{db: db}
@@ -44,6 +47,12 @@ func NewSQLRepo(db *gorm.DB) biz.CollectionRepo {
 func (repo *sqlRepo) CreateCollection(ctx context.Context, c *biz.Collection) error {
 	po := fromBiz(c)
 	err := repo.db.WithContext(ctx).Create(po).Error
+	return err
+}
+
+func (repo *sqlRepo) UpdateCollection(ctx context.Context, c *biz.Collection) error {
+	_, err := gorm.G[CollectionPO](repo.db).Where("url = ?", c.URL).Update(ctx, "create_at", time.Now())
+
 	return err
 }
 
@@ -90,7 +99,7 @@ func (repo *sqlRepo) GetByOrigin(ctx context.Context, origin string) ([]*biz.Col
 func (repo *sqlRepo) GetAllGroupedByOrigin(ctx context.Context) (map[string][]*biz.Collection, error) {
 	var pos []*CollectionPO
 
-	//TODO: I think it will cause OOM in future
+	// TODO: I think it will cause OOM in future
 	err := repo.db.WithContext(ctx).Order("origin").Find(&pos).Error
 	if err != nil {
 		return nil, biz.ErrInternalError.WithMessage(err.Error())
@@ -106,5 +115,4 @@ func (repo *sqlRepo) GetAllGroupedByOrigin(ctx context.Context) (map[string][]*b
 	}
 
 	return resultMap, nil
-
 }
