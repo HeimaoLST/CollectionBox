@@ -22,7 +22,12 @@ type originConfig struct {
 	} `json:"items"`
 }
 
-var urlRegex = regexp.MustCompile(`\b(https?://[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b`)
+// httpURLRegex: 匹配以 http/https 开头的 URL，遇到空白或常见分隔符就停止。
+var httpURLRegex = regexp.MustCompile(`https?://[^\s"'<>()]+`)
+
+// bareURLRegex: 兜底匹配没有协议前缀的域名/链接，比如 bilibili.com/video/xxx。
+// 先匹配类似 example.com，再把后面的 path 一并拿上，直到空白或分隔符。
+var bareURLRegex = regexp.MustCompile(`\b[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s"'<>()]*`)
 
 // 2. 定义实现
 type jsonOriginExtractor struct {
@@ -58,35 +63,83 @@ func NewJSONOriginExtractor(filePath string) (biz.OriginExtractor, error) {
 	return &jsonOriginExtractor{originMap: originMap}, nil
 }
 
-
 func (e *jsonOriginExtractor) ExtractAll(ctx context.Context, rawText string) ([]biz.URLOriPair, error) {
 	if rawText == "" {
 		return nil, biz.ErrInvalidArgument.WithMessage("url cannot be empty")
 	}
 
-	// 1. 使用正则查找所有匹配的
-	foundURLs := urlRegex.FindAllString(rawText, -1)
+	// 1. 先抓 http/https URL
+	httpMatches := httpURLRegex.FindAllString(rawText, -1)
+	// 2. 再抓裸域名/链接，尽量覆盖没写协议的情况
+	bareMatches := bareURLRegex.FindAllString(rawText, -1)
 
-	if len(foundURLs) == 0 {
+	if len(httpMatches) == 0 && len(bareMatches) == 0 {
 		return nil, biz.ErrInvalidArgument.WithMessage("no valid URL found in input text")
 	}
 
 	// 去重：同一个 URL+Origin 只返回一次
 	seen := make(map[string]struct{})
-	pairs := make([]biz.URLOriPair, 0, len(foundURLs))
+	pairs := make([]biz.URLOriPair, 0, len(httpMatches)+len(bareMatches))
 
-	for _, foundURL := range foundURLs {
-		// 2. 尝试解析并查找 (复用辅助函数)
+	process := func(foundURL string) {
 		origin, err := e.parseAndFindOrigin(foundURL)
 		if err != nil {
-			continue
+			return
 		}
-		key := strings.TrimSpace(foundURL) + "|" + origin
+		cleanURL := strings.TrimSpace(foundURL)
+		key := cleanURL + "|" + origin
 		if _, ok := seen[key]; ok {
-			continue
+			return
 		}
-		pairs = append(pairs, biz.URLOriPair{URL: strings.TrimSpace(foundURL), Origin: origin})
 		seen[key] = struct{}{}
+		pairs = append(pairs, biz.URLOriPair{URL: cleanURL, Origin: origin})
+	}
+
+	// 对 httpMatches 里的每一个匹配，再按内部 http/https 切分，处理“多个 URL 黏在一起”的情况
+	splitHTTP := func(raw string) []string {
+		var res []string
+		i := 0
+		for i < len(raw) {
+			idx := strings.Index(raw[i:], "http")
+			if idx == -1 {
+				break
+			}
+			idx += i
+			// 确认是 http:// 或 https://
+			if !strings.HasPrefix(raw[idx:], "http://") && !strings.HasPrefix(raw[idx:], "https://") {
+				i = idx + 4
+				continue
+			}
+			// 找下一个 http/https 的起点，当前 URL 到那里结束
+			nextHTTP := strings.Index(raw[idx+7:], "http://")
+			nextHTTPS := strings.Index(raw[idx+8:], "https://")
+			next := -1
+			if nextHTTP != -1 {
+				next = idx + 7 + nextHTTP
+			}
+			if nextHTTPS != -1 {
+				cand := idx + 8 + nextHTTPS
+				if next == -1 || cand < next {
+					next = cand
+				}
+			}
+			if next == -1 {
+				res = append(res, raw[idx:])
+				break
+			}
+			res = append(res, raw[idx:next])
+			i = next
+		}
+		return res
+	}
+
+	for _, u := range httpMatches {
+		for _, part := range splitHTTP(u) {
+			process(part)
+		}
+	}
+	for _, u := range bareMatches {
+		process(u)
 	}
 
 	if len(pairs) == 0 {
