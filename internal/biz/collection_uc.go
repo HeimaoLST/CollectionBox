@@ -2,10 +2,12 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type CollectionUsecase struct {
@@ -18,20 +20,19 @@ func NewCollectionUsecase(repo CollectionRepo, ex OriginExtractor) *CollectionUs
 }
 
 // CreateCollectionsFromText extracts all URL:Origin pairs from the input text
-// and persists each as a Collection. Returns all successfully created Collections.
-func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text string) ([]*Collection, error) {
+// and persists each as a Collection. Returns all successfully duplications Collections.
+func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text string) ([]string, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, ErrInvalidArgument.WithMessage("url cannot be empty")
 	}
 	if uc == nil || uc.repo == nil || uc.originex == nil {
 		return nil, ErrInvalidArgument.WithMessage("repository or origin extractor not configured")
 	}
-
 	pairs, err := uc.originex.ExtractAll(ctx, text)
 	if err != nil {
 		return nil, err
 	}
-	created := make([]*Collection, 0, len(pairs))
+	duplications := make([]string, 0, len(pairs))
 	for _, p := range pairs {
 		col := &Collection{
 			ID:        uuid.NewString(),
@@ -41,12 +42,29 @@ func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text
 		}
 		if err := uc.repo.CreateCollection(ctx, col); err != nil {
 			// stop on first persist error and return progress + error
-			return created, err
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				duplications = append(duplications, p.URL)
+				continue
+			}
+			return duplications, err
 		}
-		created = append(created, col)
 	}
-	return created, nil
+	return duplications, nil
 }
+
+func (uc *CollectionUsecase) UpdateCollectionCreateTime(ctx context.Context, dups []string) error {
+	for _, url := range dups {
+		col := &Collection{
+			URL: url,
+		}
+		err := uc.repo.UpdateCollection(ctx, col)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (uc *CollectionUsecase) GetByTimeRange(ctx context.Context, start, end time.Time, origin string) ([]*Collection, error) {
 	// if days <= 0 || days >= 15 {
 	// 	return nil, ErrInvalidArgument.WithMessage("too long ago")
@@ -68,8 +86,8 @@ func (uc *CollectionUsecase) GetByTimeRange(ctx context.Context, start, end time
 		return nil, err
 	}
 	return cols, nil
-
 }
+
 func (uc *CollectionUsecase) GetByOrigin(ctx context.Context, origin string) ([]*Collection, error) {
 	if origin == "" {
 		return nil, ErrInvalidArgument.WithMessage("the origin you want to search can't be empty")
