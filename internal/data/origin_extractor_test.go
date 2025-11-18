@@ -46,3 +46,18 @@ func TestExtractAll_BareDomainURL(t *testing.T) {
 		t.Fatalf("expected origin Bilibili, got %s", pairs[0].Origin)
 	}
 }
+
+// 当同一个链接既以 http(s) 形式又以裸域名形式出现时，只保留一条
+func TestExtractAll_DuplicateWithAndWithoutScheme(t *testing.T) {
+	extractor := newTestExtractor()
+	text := "https://www.bilibili.com/video/BV1EasdzKEBe/?spm_id_from=333.1007.tianma.1-1-1.click&vd_source=c7eb000d58479c25a3ec7be6de51eea4 " +
+		"www.bilibili.com/video/BV1EasdzKEBe/?spm_id_from=333.1007.tianma.1-1-1.click&vd_source=c7eb000d58479c25a3ec7be6de51eea4"
+
+	pairs, err := extractor.ExtractAll(context.Background(), text)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pairs) != 1 {
+		t.Fatalf("expected 1 pair, got %d: %+v", len(pairs), pairs)
+	}
+}

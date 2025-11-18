@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type CollectionPO struct {
@@ -44,12 +45,17 @@ func NewSQLRepo(db *gorm.DB) biz.CollectionRepo {
 	return &sqlRepo{db: db}
 }
 
-func (repo *sqlRepo) CreateCollection(ctx context.Context, c *biz.Collection) error {
+func (repo *sqlRepo) UpsertCollection(ctx context.Context, c *biz.Collection) (*biz.Collection, error) {
 	po := fromBiz(c)
-	err := repo.db.WithContext(ctx).Create(po).Error
-	return err
+	err := repo.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "url"}},
+			DoUpdates: clause.AssignmentColumns([]string{"created_time"}),
+		}).
+		Clauses(clause.Returning{}).
+		Create(&po).Error
+	return po.toBiz(), err
 }
-
 func (repo *sqlRepo) UpdateCollection(ctx context.Context, c *biz.Collection) error {
 	_, err := gorm.G[CollectionPO](repo.db).Where("url = ?", c.URL).Update(ctx, "create_at", time.Now())
 

@@ -30,41 +30,42 @@ func NewService(uc *biz.CollectionUsecase) *CollectionService {
 	}
 }
 
-// --- 您的 Handler (重构后) ---
 func (s *CollectionService) CreateCollection(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		defer r.Body.Close()
 	}
 
-	// 1. 解析 JSON (DTO)
+	// 1. 解析请求
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// 这是客户端错误 (400)
 		writeError(w, http.StatusBadRequest, "Invalid JSON format: "+err.Error())
 		return
 	}
-	// (可选的格式校验)
 	if req.URL == "" {
 		writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
 
+	// 2. 调用 Biz 层 (现在的逻辑是：有则更新，无则创建)
+	// 方法名建议改为 UpsertCollectionsFromText 或保持原样但修改内部逻辑
 	ctx := r.Context()
-	cols, err := s.uc.CreateCollectionsFromText(ctx, req.URL)
-	// 4. 【关键】翻译 biz 层错误
-	if err != nil {
+	cols, err := s.uc.UpsertCollectionsFromText(ctx, req.URL)
 
+	// 3. 错误处理
+	if err != nil {
+		// 如果有参数错误（如解析不出 URL）
 		if errors.Is(err, biz.ErrInvalidArgument) {
 			writeError(w, http.StatusBadRequest, err.Error())
 		} else {
-			logx.FromContext(ctx).Error("internal error creating collections", "err", err)
+			logx.FromContext(ctx).Error("upsert collections failed", "err", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 		}
 		return
 	}
 
-	// 5. 返回成功响应（批量创建）
-	writeJSON(w, http.StatusCreated, cols)
+	// 4. 返回结果
+	// Upsert 语义下，通常返回 200 OK，因为它不全是新建
+	writeJSON(w, http.StatusOK, cols)
 }
 
 type UpdateCollectionTimeRequest struct {

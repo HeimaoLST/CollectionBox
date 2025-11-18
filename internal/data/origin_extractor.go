@@ -77,9 +77,37 @@ func (e *jsonOriginExtractor) ExtractAll(ctx context.Context, rawText string) ([
 		return nil, biz.ErrInvalidArgument.WithMessage("no valid URL found in input text")
 	}
 
-	// 去重：同一个 URL+Origin 只返回一次
+	// 去重：同一个“规范化 host+path+query”+Origin 只返回一次
 	seen := make(map[string]struct{})
 	pairs := make([]biz.URLOriPair, 0, len(httpMatches)+len(bareMatches))
+
+	// 规范化 URL：统一成 https:// + host（去掉前缀 www.）+ path + query
+	normalizeKey := func(u string) string {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			return ""
+		}
+
+		// 如果没有协议，补一个 https://，方便解析
+		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "//") {
+			u = "https://" + u
+		}
+
+		parsed, err := url.Parse(u)
+		if err != nil {
+			return ""
+		}
+		host := strings.TrimPrefix(parsed.Hostname(), "www.")
+		if host == "" {
+			return ""
+		}
+		path := parsed.EscapedPath()
+		query := parsed.RawQuery
+		if query != "" {
+			return host + path + "?" + query
+		}
+		return host + path
+	}
 
 	process := func(foundURL string) {
 		origin, err := e.parseAndFindOrigin(foundURL)
@@ -87,7 +115,11 @@ func (e *jsonOriginExtractor) ExtractAll(ctx context.Context, rawText string) ([
 			return
 		}
 		cleanURL := strings.TrimSpace(foundURL)
-		key := cleanURL + "|" + origin
+		normKey := normalizeKey(cleanURL)
+		if normKey == "" {
+			return
+		}
+		key := normKey + "|" + origin
 		if _, ok := seen[key]; ok {
 			return
 		}

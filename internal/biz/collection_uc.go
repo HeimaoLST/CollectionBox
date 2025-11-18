@@ -21,7 +21,7 @@ func NewCollectionUsecase(repo CollectionRepo, ex OriginExtractor) *CollectionUs
 
 // CreateCollectionsFromText extracts all URL:Origin pairs from the input text
 // and persists each as a Collection. Returns all successfully duplications Collections.
-func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text string) ([]string, error) {
+func (uc *CollectionUsecase) UpsertCollectionsFromText(ctx context.Context, text string) ([]*Collection, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, ErrInvalidArgument.WithMessage("url cannot be empty")
 	}
@@ -32,7 +32,7 @@ func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text
 	if err != nil {
 		return nil, err
 	}
-	duplications := make([]string, 0, len(pairs))
+	results := make([]*Collection, 0, len(pairs))
 	for _, p := range pairs {
 		col := &Collection{
 			ID:        uuid.NewString(),
@@ -40,16 +40,13 @@ func (uc *CollectionUsecase) CreateCollectionsFromText(ctx context.Context, text
 			Origin:    p.Origin,
 			CreatedAt: time.Now(),
 		}
-		if err := uc.repo.CreateCollection(ctx, col); err != nil {
-			// stop on first persist error and return progress + error
-			if isSQLiteUniqueConstraintError(err) {
-				duplications = append(duplications, p.URL)
-				continue
-			}
-			return duplications, err
+		savedCol, err := uc.repo.UpsertCollection(ctx, col)
+		if err != nil {
+			return nil, err
 		}
+		results = append(results, savedCol)
 	}
-	return duplications, nil
+	return results, nil
 }
 
 func (uc *CollectionUsecase) UpdateCollectionCreateTime(ctx context.Context, dups []string) error {

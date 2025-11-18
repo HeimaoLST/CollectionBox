@@ -13,7 +13,7 @@ type Collection struct {
 }
 
 type CollectionRepo interface {
-	CreateCollection(ctx context.Context, collection *Collection) error
+	UpsertCollection(ctx context.Context, collection *Collection) (*Collection, error)
 	UpdateCollection(ctx context.Context, collection *Collection) error
 	GetByTimeRange(ctx context.Context, start time.Time, end time.Time, origin string) ([]*Collection, error)
 	GetByOrigin(ctx context.Context, origin string) ([]*Collection, error)
